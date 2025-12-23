@@ -1,0 +1,2020 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cursor Usage Observatory | 2025</title>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
+    <script src="https://cdn.jsdelivr.net/npm/pako@2.1.0/dist/pako.min.js"></script>
+    <style>
+        :root {
+            --bg-deep: #08080a;
+            --bg-surface: #0f0f12;
+            --bg-elevated: #16161a;
+            --bg-hover: #1e1e24;
+            --border-subtle: rgba(255,255,255,0.05);
+            --border-medium: rgba(255,255,255,0.1);
+            --text-primary: #fafafa;
+            --text-secondary: #9898a0;
+            --text-tertiary: #58585f;
+            --accent-gold: #f5a623;
+            --accent-amber: #ff9500;
+            --accent-coral: #ff6b6b;
+            --accent-teal: #2dd4bf;
+            --accent-violet: #a78bfa;
+            --accent-blue: #60a5fa;
+            --accent-green: #4ade80;
+            --gradient-gold: linear-gradient(135deg, #f5a623 0%, #ff9500 50%, #ff6b6b 100%);
+            --gradient-rank: linear-gradient(135deg, #ffd700 0%, #ff9500 100%);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html { scroll-behavior: smooth; }
+
+        body {
+            font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-deep);
+            color: var(--text-primary);
+            min-height: 100vh;
+            line-height: 1.6;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        .ambient {
+            position: fixed;
+            inset: 0;
+            background: 
+                radial-gradient(ellipse 80% 50% at 20% 10%, rgba(245,166,35,0.04) 0%, transparent 50%),
+                radial-gradient(ellipse 60% 40% at 80% 90%, rgba(255,107,107,0.03) 0%, transparent 50%);
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .container {
+            position: relative;
+            z-index: 1;
+            max-width: 1440px;
+            margin: 0 auto;
+            padding: 48px 32px 96px;
+        }
+
+        @media (max-width: 768px) {
+            .container { padding: 24px 16px 64px; }
+        }
+
+        /* Upload Zone */
+        .upload-zone {
+            border: 2px dashed var(--border-medium);
+            border-radius: 24px;
+            padding: 64px 32px;
+            text-align: center;
+            background: var(--bg-surface);
+            transition: all 0.3s ease;
+            cursor: pointer;
+            margin-bottom: 48px;
+        }
+
+        .upload-zone:hover, .upload-zone.dragover {
+            border-color: var(--accent-gold);
+            background: rgba(245,166,35,0.05);
+        }
+
+        .upload-zone h2 {
+            font-size: 28px;
+            font-weight: 600;
+            margin-bottom: 12px;
+            background: var(--gradient-gold);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .upload-zone p {
+            color: var(--text-secondary);
+            margin-bottom: 24px;
+        }
+
+        .upload-zone input {
+            display: none;
+        }
+
+        .upload-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 14px 28px;
+            background: var(--gradient-gold);
+            border: none;
+            border-radius: 100px;
+            color: #000;
+            font-family: inherit;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .upload-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(245,166,35,0.3);
+        }
+
+        .how-to {
+            margin-top: 32px;
+            padding: 20px;
+            background: var(--bg-elevated);
+            border-radius: 12px;
+            text-align: left;
+            max-width: 500px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .how-to h4 {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--accent-gold);
+            margin-bottom: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .how-to ol {
+            color: var(--text-secondary);
+            font-size: 14px;
+            padding-left: 20px;
+        }
+
+        .how-to li {
+            margin-bottom: 8px;
+        }
+
+        .how-to code {
+            background: var(--bg-deep);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 12px;
+            color: var(--accent-gold);
+        }
+
+        /* Report Section (hidden until data loaded) */
+        .report-section {
+            display: none;
+        }
+
+        .report-section.visible {
+            display: block;
+        }
+
+        /* Header */
+        header {
+            margin-bottom: 40px;
+            padding-bottom: 32px;
+            border-bottom: 1px solid var(--border-subtle);
+        }
+
+        .header-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            flex-wrap: wrap;
+            gap: 20px;
+        }
+
+        .eyebrow {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 11px;
+            letter-spacing: 0.2em;
+            text-transform: uppercase;
+            color: var(--accent-gold);
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .eyebrow::before {
+            content: '';
+            width: 8px;
+            height: 8px;
+            background: var(--accent-gold);
+            border-radius: 50%;
+            box-shadow: 0 0 12px var(--accent-gold);
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; box-shadow: 0 0 12px var(--accent-gold); }
+            50% { opacity: 0.6; box-shadow: 0 0 6px var(--accent-gold); }
+        }
+
+        h1 {
+            font-size: clamp(32px, 5vw, 48px);
+            font-weight: 700;
+            letter-spacing: -0.03em;
+            background: var(--gradient-gold);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 8px;
+        }
+
+        .subtitle {
+            font-size: 16px;
+            color: var(--text-secondary);
+            max-width: 500px;
+        }
+
+        .date-range {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 13px;
+            color: var(--text-tertiary);
+            margin-top: 16px;
+            display: inline-flex;
+            align-items: center;
+            gap: 12px;
+            padding: 10px 16px;
+            background: var(--bg-surface);
+            border: 1px solid var(--border-subtle);
+            border-radius: 100px;
+        }
+
+        .date-range span { color: var(--text-secondary); }
+
+        .header-actions {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .action-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 12px 20px;
+            background: var(--bg-surface);
+            border: 1px solid var(--border-subtle);
+            border-radius: 100px;
+            color: var(--text-primary);
+            font-family: inherit;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .action-btn:hover {
+            border-color: var(--accent-gold);
+            background: var(--bg-elevated);
+        }
+
+        .action-btn.primary {
+            background: var(--gradient-gold);
+            border: none;
+            color: #000;
+        }
+
+        .action-btn.primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(245,166,35,0.3);
+        }
+
+        /* Percentile Rankings */
+        .percentile-section {
+            margin-bottom: 48px;
+        }
+
+        .percentile-section h2 {
+            font-size: 20px;
+            font-weight: 600;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .percentile-section h2::before {
+            content: '🏆';
+        }
+
+        .percentile-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 16px;
+        }
+
+        .percentile-card {
+            background: var(--bg-surface);
+            border: 1px solid var(--border-subtle);
+            border-radius: 20px;
+            padding: 24px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .percentile-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: var(--gradient-rank);
+        }
+
+        .percentile-label {
+            font-size: 12px;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--text-tertiary);
+            margin-bottom: 8px;
+        }
+
+        .percentile-value {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 42px;
+            font-weight: 700;
+            background: var(--gradient-rank);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            line-height: 1;
+            margin-bottom: 8px;
+        }
+
+        .percentile-desc {
+            font-size: 14px;
+            color: var(--text-secondary);
+            margin-bottom: 16px;
+        }
+
+        .percentile-bar {
+            height: 8px;
+            background: var(--bg-elevated);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .percentile-fill {
+            height: 100%;
+            background: var(--gradient-rank);
+            border-radius: 4px;
+            transition: width 1s ease-out;
+        }
+
+        .percentile-context {
+            font-size: 12px;
+            color: var(--text-tertiary);
+            margin-top: 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 4px;
+        }
+
+        .percentile-context strong {
+            color: var(--text-secondary);
+        }
+
+        .source-tag {
+            font-size: 9px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            padding: 2px 6px;
+            background: var(--bg-elevated);
+            border-radius: 4px;
+            color: var(--accent-blue);
+        }
+
+        /* Stats Grid */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 16px;
+            margin-bottom: 48px;
+        }
+
+        @media (max-width: 1200px) {
+            .stats-grid { grid-template-columns: repeat(3, 1fr); }
+        }
+
+        @media (max-width: 768px) {
+            .stats-grid { grid-template-columns: repeat(2, 1fr); }
+        }
+
+        .stat-card {
+            background: var(--bg-surface);
+            border: 1px solid var(--border-subtle);
+            border-radius: 16px;
+            padding: 24px;
+            position: relative;
+            overflow: hidden;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 1px;
+            background: var(--gradient-gold);
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .stat-card:hover {
+            border-color: var(--border-medium);
+            transform: translateY(-3px);
+            box-shadow: 0 20px 40px -20px rgba(245,166,35,0.15);
+        }
+
+        .stat-card:hover::before { opacity: 1; }
+
+        .stat-label {
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: var(--text-tertiary);
+            margin-bottom: 10px;
+        }
+
+        .stat-value {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 28px;
+            font-weight: 500;
+            line-height: 1.1;
+        }
+
+        .stat-value.gold { color: var(--accent-gold); }
+        .stat-value.coral { color: var(--accent-coral); }
+        .stat-value.teal { color: var(--accent-teal); }
+        .stat-value.violet { color: var(--accent-violet); }
+        .stat-value.blue { color: var(--accent-blue); }
+
+        .stat-detail {
+            font-size: 12px;
+            color: var(--text-tertiary);
+            margin-top: 10px;
+        }
+
+        /* Charts */
+        .charts {
+            display: grid;
+            gap: 24px;
+        }
+
+        .chart-row {
+            display: grid;
+            gap: 24px;
+        }
+
+        .chart-row.two-col { grid-template-columns: 1.5fr 1fr; }
+        .chart-row.equal { grid-template-columns: 1fr 1fr; }
+
+        @media (max-width: 1024px) {
+            .chart-row.two-col,
+            .chart-row.equal { grid-template-columns: 1fr; }
+        }
+
+        .chart-card {
+            background: var(--bg-surface);
+            border: 1px solid var(--border-subtle);
+            border-radius: 20px;
+            padding: 28px;
+            transition: border-color 0.3s ease;
+        }
+
+        .chart-card:hover { border-color: var(--border-medium); }
+
+        .chart-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 24px;
+        }
+
+        .chart-title {
+            font-size: 17px;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 4px;
+        }
+
+        .chart-subtitle {
+            font-size: 13px;
+            color: var(--text-tertiary);
+        }
+
+        .chart-container {
+            position: relative;
+            height: 320px;
+        }
+
+        .chart-container.tall { height: 400px; }
+        .chart-container.short { height: 240px; }
+
+        /* Table */
+        .table-wrapper { overflow-x: auto; }
+
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .data-table th {
+            text-align: left;
+            font-size: 10px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: var(--text-tertiary);
+            padding: 14px 16px;
+            border-bottom: 1px solid var(--border-subtle);
+        }
+
+        .data-table td {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 13px;
+            color: var(--text-secondary);
+            padding: 16px;
+            border-bottom: 1px solid var(--border-subtle);
+            transition: all 0.2s ease;
+        }
+
+        .data-table tbody tr:hover td {
+            background: var(--bg-elevated);
+            color: var(--text-primary);
+        }
+
+        .data-table .model-name {
+            font-family: 'DM Sans', sans-serif;
+            font-weight: 500;
+            color: var(--text-primary);
+        }
+
+        .data-table .cost { color: var(--accent-gold); }
+
+        .data-table .bar-cell {
+            position: relative;
+            min-width: 120px;
+        }
+
+        .bar-bg {
+            position: absolute;
+            left: 16px;
+            top: 50%;
+            transform: translateY(-50%);
+            height: 6px;
+            background: var(--accent-gold);
+            border-radius: 3px;
+            opacity: 0.3;
+        }
+
+        /* Benchmark callout */
+        .benchmark-callout {
+            background: var(--bg-elevated);
+            border: 1px solid var(--border-subtle);
+            border-radius: 12px;
+            padding: 16px 20px;
+            margin-top: 24px;
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+
+        .benchmark-callout strong {
+            color: var(--accent-gold);
+        }
+
+        /* Share Modal */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.8);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+        }
+
+        .modal-overlay.visible {
+            display: flex;
+        }
+
+        .modal {
+            background: var(--bg-surface);
+            border: 1px solid var(--border-medium);
+            border-radius: 24px;
+            padding: 32px;
+            max-width: 500px;
+            width: 100%;
+        }
+
+        .modal h3 {
+            font-size: 20px;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .modal p {
+            color: var(--text-secondary);
+            font-size: 14px;
+            margin-bottom: 20px;
+        }
+
+        .modal-input-group {
+            margin-bottom: 20px;
+        }
+
+        .modal-input-group label {
+            display: block;
+            font-size: 12px;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--text-tertiary);
+            margin-bottom: 8px;
+        }
+
+        .modal-input-group input {
+            width: 100%;
+            padding: 14px 16px;
+            background: var(--bg-elevated);
+            border: 1px solid var(--border-subtle);
+            border-radius: 12px;
+            color: var(--text-primary);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 14px;
+        }
+
+        .modal-input-group input:focus {
+            outline: none;
+            border-color: var(--accent-gold);
+        }
+
+        .share-link-box {
+            background: var(--bg-elevated);
+            border: 1px solid var(--border-subtle);
+            border-radius: 12px;
+            padding: 14px 16px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 12px;
+            color: var(--accent-gold);
+            word-break: break-all;
+            margin-bottom: 20px;
+        }
+
+        .modal-actions {
+            display: flex;
+            gap: 12px;
+            justify-content: flex-end;
+        }
+
+        /* Methodology Section */
+        .methodology-section {
+            margin-top: 24px;
+        }
+
+        .methodology-toggle {
+            width: 100%;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px 20px;
+            background: var(--bg-surface);
+            border: 1px solid var(--border-subtle);
+            border-radius: 12px;
+            color: var(--text-primary);
+            font-family: inherit;
+            font-size: 15px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .methodology-toggle:hover {
+            border-color: var(--border-medium);
+            background: var(--bg-elevated);
+        }
+
+        .methodology-toggle .chevron {
+            transition: transform 0.3s ease;
+        }
+
+        .methodology-toggle.expanded .chevron {
+            transform: rotate(180deg);
+        }
+
+        .methodology-content {
+            display: none;
+            padding: 24px;
+            background: var(--bg-surface);
+            border: 1px solid var(--border-subtle);
+            border-top: none;
+            border-radius: 0 0 12px 12px;
+            margin-top: -1px;
+        }
+
+        .methodology-content.visible {
+            display: block;
+        }
+
+        .methodology-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+        }
+
+        .methodology-card {
+            background: var(--bg-elevated);
+            border-radius: 12px;
+            padding: 20px;
+        }
+
+        .methodology-card h4 {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--accent-gold);
+            margin-bottom: 12px;
+        }
+
+        .methodology-card ul {
+            list-style: none;
+            padding: 0;
+        }
+
+        .methodology-card li {
+            font-size: 13px;
+            color: var(--text-secondary);
+            padding: 8px 0;
+            border-bottom: 1px solid var(--border-subtle);
+        }
+
+        .methodology-card li:last-child {
+            border-bottom: none;
+        }
+
+        .methodology-card a {
+            color: var(--accent-blue);
+            text-decoration: none;
+            font-size: 11px;
+        }
+
+        .methodology-card a:hover {
+            text-decoration: underline;
+        }
+
+        .methodology-card p {
+            font-size: 13px;
+            color: var(--text-secondary);
+            margin-bottom: 12px;
+        }
+
+        .methodology-note {
+            font-size: 12px !important;
+            color: var(--text-tertiary) !important;
+            font-style: italic;
+            margin-top: 12px !important;
+        }
+
+        .thresholds-table-wrapper {
+            overflow-x: auto;
+        }
+
+        .thresholds-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+
+        .thresholds-table th {
+            text-align: left;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--text-tertiary);
+            padding: 12px 16px;
+            border-bottom: 1px solid var(--border-subtle);
+            background: var(--bg-elevated);
+        }
+
+        .thresholds-table td {
+            padding: 12px 16px;
+            color: var(--text-secondary);
+            border-bottom: 1px solid var(--border-subtle);
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .percentile-badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 100px;
+            font-size: 11px;
+            font-weight: 600;
+            font-family: 'DM Sans', sans-serif;
+        }
+
+        .percentile-badge.top1 {
+            background: linear-gradient(135deg, #ffd700, #ff9500);
+            color: #000;
+        }
+
+        .percentile-badge.top5 {
+            background: rgba(245,166,35,0.2);
+            color: var(--accent-gold);
+        }
+
+        .percentile-badge.top10 {
+            background: rgba(167,139,250,0.2);
+            color: var(--accent-violet);
+        }
+
+        .percentile-badge.top25 {
+            background: rgba(96,165,250,0.2);
+            color: var(--accent-blue);
+        }
+
+        .percentile-badge.median {
+            background: rgba(45,212,191,0.2);
+            color: var(--accent-teal);
+        }
+
+        .percentile-badge.bottom {
+            background: rgba(255,255,255,0.1);
+            color: var(--text-tertiary);
+        }
+
+        .methodology-disclaimer {
+            margin-top: 24px;
+            padding: 16px;
+            background: rgba(255,107,107,0.1);
+            border: 1px solid rgba(255,107,107,0.2);
+            border-radius: 8px;
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        .methodology-disclaimer strong {
+            color: var(--accent-coral);
+        }
+
+        /* Footer */
+        footer {
+            margin-top: 72px;
+            padding-top: 32px;
+            border-top: 1px solid var(--border-subtle);
+            text-align: center;
+        }
+
+        .footer-text {
+            font-size: 13px;
+            color: var(--text-tertiary);
+        }
+
+        .footer-text span {
+            background: var(--gradient-gold);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        /* Toast */
+        .toast {
+            position: fixed;
+            bottom: 24px;
+            left: 50%;
+            transform: translateX(-50%) translateY(100px);
+            background: var(--bg-elevated);
+            border: 1px solid var(--accent-green);
+            color: var(--text-primary);
+            padding: 14px 24px;
+            border-radius: 100px;
+            font-size: 14px;
+            z-index: 1001;
+            transition: transform 0.3s ease;
+        }
+
+        .toast.visible {
+            transform: translateX(-50%) translateY(0);
+        }
+    </style>
+</head>
+<body>
+    <div class="ambient"></div>
+    <div class="container">
+        <!-- Upload Zone -->
+        <div class="upload-zone" id="uploadZone">
+            <h2>Cursor Usage Observatory</h2>
+            <p>Upload your Cursor usage CSV to generate a personalized analytics report with percentile rankings</p>
+            <button class="upload-btn" onclick="document.getElementById('fileInput').click()">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                    <polyline points="17 8 12 3 7 8"/>
+                    <line x1="12" y1="3" x2="12" y2="15"/>
+                </svg>
+                Upload CSV
+            </button>
+            <input type="file" id="fileInput" accept=".csv">
+            
+            <div class="how-to">
+                <h4>How to export from Cursor</h4>
+                <ol>
+                    <li>Open Cursor Settings → <code>Account</code></li>
+                    <li>Click <code>Manage Account</code> to open dashboard</li>
+                    <li>Navigate to <code>Usage</code> section</li>
+                    <li>Click <code>Export CSV</code> button</li>
+                </ol>
+            </div>
+        </div>
+
+        <!-- Report Section -->
+        <div class="report-section" id="reportSection">
+            <header>
+                <div class="header-row">
+                    <div>
+                        <div class="eyebrow">Usage Observatory</div>
+                        <h1>Cursor Analytics 2025</h1>
+                        <p class="subtitle">Your AI-powered development workflow analyzed against 1M+ Cursor users</p>
+                        <div class="date-range" id="dateRange">Loading...</div>
+                    </div>
+                    <div class="header-actions">
+                        <button class="action-btn" onclick="document.getElementById('fileInput').click()">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                                <polyline points="17 8 12 3 7 8"/>
+                                <line x1="12" y1="3" x2="12" y2="15"/>
+                            </svg>
+                            New Upload
+                        </button>
+                        <button class="action-btn primary" onclick="showShareModal()">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <circle cx="18" cy="5" r="3"/>
+                                <circle cx="6" cy="12" r="3"/>
+                                <circle cx="18" cy="19" r="3"/>
+                                <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/>
+                                <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
+                            </svg>
+                            Share Report
+                        </button>
+                    </div>
+                </div>
+            </header>
+
+            <!-- Percentile Rankings -->
+            <div class="percentile-section">
+                <h2>Your Rankings vs. 1M+ Cursor Users</h2>
+                <div class="percentile-grid" id="percentileGrid"></div>
+                <div class="methodology-section">
+                    <button class="methodology-toggle" onclick="toggleMethodology()">
+                        <span>📊 How Rankings Are Calculated</span>
+                        <svg class="chevron" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="6 9 12 15 18 9"></polyline>
+                        </svg>
+                    </button>
+                    <div class="methodology-content" id="methodologyContent">
+                        <div class="methodology-grid">
+                            <div class="methodology-card">
+                                <h4>📈 Data Sources</h4>
+                                <ul>
+                                    <li><strong>1M+ total users</strong> including 360K paying customers
+                                        <a href="https://taptwice.digital/cursor-ai-statistics/" target="_blank" rel="noopener">[TapTwice Digital]</a>
+                                    </li>
+                                    <li><strong>1 billion lines of accepted code/day</strong> generated across platform
+                                        <a href="https://officechair.substack.com/" target="_blank" rel="noopener">[OfficeChair]</a>
+                                    </li>
+                                    <li><strong>Median Pro: ~225 Sonnet 4 requests/month</strong> (or ~550 Gemini, ~650 GPT-4.1)
+                                        <a href="https://cursor.com" target="_blank" rel="noopener">[Cursor Official]</a>
+                                    </li>
+                                    <li><strong>~30% acceptance rate</strong> for AI-suggested code
+                                        <a href="https://opsera.io" target="_blank" rel="noopener">[Opsera]</a>
+                                    </li>
+                                </ul>
+                            </div>
+                            <div class="methodology-card">
+                                <h4>🧮 Percentile Calculation Method</h4>
+                                <p>We use <strong>power-law distribution modeling</strong> based on the assumption that AI tool usage follows patterns similar to other developer tools:</p>
+                                <ul>
+                                    <li>Most users are light/moderate (long tail)</li>
+                                    <li>Small percentage are power users (heavy tail)</li>
+                                    <li>Median serves as the 50th percentile anchor</li>
+                                </ul>
+                                <p class="methodology-note">Percentile thresholds are estimated. Cursor does not publish official distribution data.</p>
+                            </div>
+                        </div>
+                        
+                        <h4 style="margin-top: 24px; margin-bottom: 16px;">Ranking Thresholds</h4>
+                        <div class="thresholds-table-wrapper">
+                            <table class="thresholds-table">
+                                <thead>
+                                    <tr>
+                                        <th>Percentile</th>
+                                        <th>Requests/Month</th>
+                                        <th>Spend/Month</th>
+                                        <th>Tokens/Month</th>
+                                        <th>Cache Rate</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td><span class="percentile-badge top1">Top 1%</span></td>
+                                        <td>≥2,000</td>
+                                        <td>≥$500</td>
+                                        <td>≥50M</td>
+                                        <td>≥95%</td>
+                                    </tr>
+                                    <tr>
+                                        <td><span class="percentile-badge top5">Top 5%</span></td>
+                                        <td>≥1,200</td>
+                                        <td>≥$200</td>
+                                        <td>≥20M</td>
+                                        <td>≥90%</td>
+                                    </tr>
+                                    <tr>
+                                        <td><span class="percentile-badge top10">Top 10%</span></td>
+                                        <td>≥800</td>
+                                        <td>≥$100</td>
+                                        <td>≥10M</td>
+                                        <td>≥85%</td>
+                                    </tr>
+                                    <tr>
+                                        <td><span class="percentile-badge top25">Top 25%</span></td>
+                                        <td>≥450</td>
+                                        <td>≥$50</td>
+                                        <td>≥5M</td>
+                                        <td>≥75%</td>
+                                    </tr>
+                                    <tr>
+                                        <td><span class="percentile-badge median">Median</span></td>
+                                        <td>~225</td>
+                                        <td>~$20</td>
+                                        <td>~2M</td>
+                                        <td>~60%</td>
+                                    </tr>
+                                    <tr>
+                                        <td><span class="percentile-badge bottom">Bottom 25%</span></td>
+                                        <td>&lt;80</td>
+                                        <td>&lt;$5</td>
+                                        <td>&lt;500K</td>
+                                        <td>&lt;40%</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        
+                        <div class="methodology-disclaimer">
+                            <strong>⚠️ Disclaimer:</strong> These rankings are estimates based on publicly available information and reasonable assumptions about usage distributions. 
+                            Cursor does not publish official percentile breakdowns. Your actual ranking among all users may differ. 
+                            Data sources accessed December 2025.
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Stats -->
+            <div class="stats-grid" id="statsGrid">
+                <div class="stat-card">
+                    <div class="stat-label">Total Requests</div>
+                    <div class="stat-value gold" id="totalRequests">—</div>
+                    <div class="stat-detail" id="avgDailyRequests"></div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Total Cost</div>
+                    <div class="stat-value coral" id="totalCost">—</div>
+                    <div class="stat-detail" id="avgMonthlyCost"></div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Tokens Processed</div>
+                    <div class="stat-value teal" id="totalTokens">—</div>
+                    <div class="stat-detail" id="avgTokensPerRequest"></div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Cache Efficiency</div>
+                    <div class="stat-value violet" id="cacheEfficiency">—</div>
+                    <div class="stat-detail" id="cacheDetail"></div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Active Days</div>
+                    <div class="stat-value blue" id="activeDays">—</div>
+                    <div class="stat-detail" id="activeDaysDetail"></div>
+                </div>
+            </div>
+
+            <!-- Charts -->
+            <div class="charts">
+                <div class="chart-card">
+                    <div class="chart-header">
+                        <div>
+                            <div class="chart-title">Usage Timeline</div>
+                            <div class="chart-subtitle">Daily request volume and spending over time</div>
+                        </div>
+                    </div>
+                    <div class="chart-container tall">
+                        <canvas id="timelineChart"></canvas>
+                    </div>
+                </div>
+
+                <div class="chart-row two-col">
+                    <div class="chart-card">
+                        <div class="chart-header">
+                            <div>
+                                <div class="chart-title">Model Distribution</div>
+                                <div class="chart-subtitle">Request breakdown by model family</div>
+                            </div>
+                        </div>
+                        <div class="chart-container">
+                            <canvas id="modelChart"></canvas>
+                        </div>
+                    </div>
+                    <div class="chart-card">
+                        <div class="chart-header">
+                            <div>
+                                <div class="chart-title">Billing Type</div>
+                                <div class="chart-subtitle">On-demand vs included requests</div>
+                            </div>
+                        </div>
+                        <div class="chart-container">
+                            <canvas id="kindChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="chart-row equal">
+                    <div class="chart-card">
+                        <div class="chart-header">
+                            <div>
+                                <div class="chart-title">Monthly Spending</div>
+                                <div class="chart-subtitle">Cost breakdown by month</div>
+                            </div>
+                        </div>
+                        <div class="chart-container">
+                            <canvas id="monthlyChart"></canvas>
+                        </div>
+                    </div>
+                    <div class="chart-card">
+                        <div class="chart-header">
+                            <div>
+                                <div class="chart-title">Token Composition</div>
+                                <div class="chart-subtitle">Input, output, and cached tokens</div>
+                            </div>
+                        </div>
+                        <div class="chart-container">
+                            <canvas id="tokenChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="chart-row equal">
+                    <div class="chart-card">
+                        <div class="chart-header">
+                            <div>
+                                <div class="chart-title">Hourly Activity</div>
+                                <div class="chart-subtitle">When you use Cursor most (UTC)</div>
+                            </div>
+                        </div>
+                        <div class="chart-container short">
+                            <canvas id="hourlyChart"></canvas>
+                        </div>
+                    </div>
+                    <div class="chart-card">
+                        <div class="chart-header">
+                            <div>
+                                <div class="chart-title">Day of Week</div>
+                                <div class="chart-subtitle">Usage patterns across the week</div>
+                            </div>
+                        </div>
+                        <div class="chart-container short">
+                            <canvas id="weekdayChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="chart-card">
+                    <div class="chart-header">
+                        <div>
+                            <div class="chart-title">Model Performance</div>
+                            <div class="chart-subtitle">Detailed breakdown by model</div>
+                        </div>
+                    </div>
+                    <div class="table-wrapper">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Model</th>
+                                    <th>Requests</th>
+                                    <th>Total Cost</th>
+                                    <th>Avg Tokens</th>
+                                    <th>Cache Rate</th>
+                                </tr>
+                            </thead>
+                            <tbody id="modelTableBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <footer>
+                <p class="footer-text">Generated with <span>✦</span> Cursor Usage Observatory</p>
+            </footer>
+        </div>
+    </div>
+
+    <!-- Share Modal -->
+    <div class="modal-overlay" id="shareModal">
+        <div class="modal">
+            <h3>Share Your Report</h3>
+            <p>Generate a shareable link with your key metrics. Full data stays private.</p>
+            
+            <div class="modal-input-group">
+                <label>Report Name (optional)</label>
+                <input type="text" id="reportName" placeholder="my-cursor-stats" pattern="[a-z0-9-]+" />
+            </div>
+            
+            <div class="share-link-box" id="shareLink">Click "Generate Link" to create your shareable URL</div>
+            
+            <div class="modal-actions">
+                <button class="action-btn" onclick="hideShareModal()">Cancel</button>
+                <button class="action-btn" onclick="generateShareLink()">Generate Link</button>
+                <button class="action-btn primary" onclick="copyShareLink()">Copy Link</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="toast" id="toast">Copied to clipboard!</div>
+
+    <script>
+        // Global state
+        let reportData = null;
+        let charts = {};
+
+        // Colors
+        const colors = {
+            gold: '#f5a623',
+            amber: '#ff9500',
+            coral: '#ff6b6b',
+            teal: '#2dd4bf',
+            violet: '#a78bfa',
+            blue: '#60a5fa',
+            pink: '#f472b6',
+            lime: '#a3e635',
+            cyan: '#22d3ee',
+            orange: '#fb923c'
+        };
+        const colorArr = Object.values(colors);
+
+        // Formatting
+        const fmt = n => {
+            if (n >= 1e9) return (n / 1e9).toFixed(2) + 'B';
+            if (n >= 1e6) return (n / 1e6).toFixed(2) + 'M';
+            if (n >= 1e3) return (n / 1e3).toFixed(1) + 'K';
+            return n.toLocaleString();
+        };
+        const fmtCurrency = n => '$' + n.toFixed(2);
+
+        // Chart.js defaults
+        Chart.defaults.color = '#9898a0';
+        Chart.defaults.borderColor = 'rgba(255,255,255,0.05)';
+        Chart.defaults.font.family = "'DM Sans', sans-serif";
+
+        // Benchmarks (from public Cursor data)
+        const BENCHMARKS = {
+            // Median monthly requests for Pro users
+            medianMonthlyRequests: 225,
+            // Top percentile thresholds (monthly requests)
+            requestPercentiles: {
+                99: 2000,  // Power users burning through limits
+                95: 1200,
+                90: 800,
+                75: 450,
+                50: 225,
+                25: 80,
+                10: 20
+            },
+            // Monthly spend thresholds
+            spendPercentiles: {
+                99: 500,
+                95: 200,
+                90: 100,
+                75: 50,
+                50: 20,
+                25: 5,
+                10: 0
+            },
+            // Tokens per month
+            tokenPercentiles: {
+                99: 50000000,
+                95: 20000000,
+                90: 10000000,
+                75: 5000000,
+                50: 2000000,
+                25: 500000,
+                10: 100000
+            },
+            // Cache efficiency
+            cachePercentiles: {
+                99: 95,
+                95: 90,
+                90: 85,
+                75: 75,
+                50: 60,
+                25: 40,
+                10: 20
+            }
+        };
+
+        // Calculate percentile from value
+        function calculatePercentile(value, percentiles) {
+            const entries = Object.entries(percentiles).map(([p, v]) => [parseInt(p), v]).sort((a, b) => b[0] - a[0]);
+            
+            for (const [percentile, threshold] of entries) {
+                if (value >= threshold) {
+                    return percentile;
+                }
+            }
+            return 5; // Below 10th percentile
+        }
+
+        // Parse CSV
+        function parseCSV(text) {
+            const lines = text.trim().split('\n');
+            const headers = parseCSVLine(lines[0]);
+            const data = [];
+
+            for (let i = 1; i < lines.length; i++) {
+                const values = parseCSVLine(lines[i]);
+                if (values.length >= headers.length) {
+                    const row = {};
+                    headers.forEach((header, idx) => {
+                        row[header.trim()] = values[idx]?.replace(/^"|"$/g, '').trim() || '';
+                    });
+                    data.push({
+                        date: row['Date'],
+                        kind: row['Kind'],
+                        model: row['Model'],
+                        input: parseInt(row['Input (w/ Cache Write)']) || 0,
+                        cache: parseInt(row['Cache Read']) || 0,
+                        output: parseInt(row['Output Tokens']) || 0,
+                        total: parseInt(row['Total Tokens']) || 0,
+                        cost: (row['Cost'] && row['Cost'] !== 'NaN') ? parseFloat(row['Cost']) : 0
+                    });
+                }
+            }
+            return data;
+        }
+
+        function parseCSVLine(line) {
+            const result = [];
+            let current = '';
+            let inQuotes = false;
+
+            for (let i = 0; i < line.length; i++) {
+                const char = line[i];
+                if (char === '"') {
+                    inQuotes = !inQuotes;
+                } else if (char === ',' && !inQuotes) {
+                    result.push(current);
+                    current = '';
+                } else {
+                    current += char;
+                }
+            }
+            result.push(current);
+            return result;
+        }
+
+        // File handling
+        const uploadZone = document.getElementById('uploadZone');
+        const fileInput = document.getElementById('fileInput');
+
+        uploadZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadZone.classList.add('dragover');
+        });
+
+        uploadZone.addEventListener('dragleave', () => {
+            uploadZone.classList.remove('dragover');
+        });
+
+        uploadZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadZone.classList.remove('dragover');
+            const file = e.dataTransfer.files[0];
+            if (file) handleFile(file);
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) handleFile(file);
+        });
+
+        function handleFile(file) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const data = parseCSV(e.target.result);
+                if (data.length > 0) {
+                    reportData = data;
+                    renderReport(data);
+                } else {
+                    alert('Could not parse CSV. Please ensure it\'s a valid Cursor usage export.');
+                }
+            };
+            reader.readAsText(file);
+        }
+
+        // Render report
+        function renderReport(data) {
+            // Show report section
+            document.getElementById('uploadZone').style.display = 'none';
+            document.getElementById('reportSection').classList.add('visible');
+
+            // Destroy existing charts
+            Object.values(charts).forEach(chart => chart.destroy());
+            charts = {};
+
+            // Calculate metrics
+            const totalCost = data.reduce((s, d) => s + d.cost, 0);
+            const totalTokens = data.reduce((s, d) => s + d.total, 0);
+            const cacheTokens = data.reduce((s, d) => s + d.cache, 0);
+            const inputTokens = data.reduce((s, d) => s + d.input, 0);
+            const outputTokens = data.reduce((s, d) => s + d.output, 0);
+
+            const dates = data.map(d => new Date(d.date)).filter(d => !isNaN(d));
+            const minDate = new Date(Math.min(...dates));
+            const maxDate = new Date(Math.max(...dates));
+            const uniqueDays = new Set(dates.map(d => d.toDateString())).size;
+            const totalDays = Math.ceil((maxDate - minDate) / (86400000)) + 1;
+            const months = Math.max(1, Math.ceil((maxDate - minDate) / (86400000 * 30)));
+
+            // Monthly averages for percentile calculation
+            const monthlyRequests = data.length / months;
+            const monthlySpend = totalCost / months;
+            const monthlyTokens = totalTokens / months;
+            const cacheRate = inputTokens > 0 ? (cacheTokens / (inputTokens + cacheTokens)) * 100 : 0;
+
+            // Calculate percentiles
+            const requestPercentile = calculatePercentile(monthlyRequests, BENCHMARKS.requestPercentiles);
+            const spendPercentile = calculatePercentile(monthlySpend, BENCHMARKS.spendPercentiles);
+            const tokenPercentile = calculatePercentile(monthlyTokens, BENCHMARKS.tokenPercentiles);
+            const cachePercentile = calculatePercentile(cacheRate, BENCHMARKS.cachePercentiles);
+
+            // Render percentiles
+            document.getElementById('percentileGrid').innerHTML = `
+                <div class="percentile-card">
+                    <div class="percentile-label">Request Volume</div>
+                    <div class="percentile-value">Top ${100 - requestPercentile}%</div>
+                    <div class="percentile-desc">${fmt(Math.round(monthlyRequests))} requests/month</div>
+                    <div class="percentile-bar">
+                        <div class="percentile-fill" style="width: ${requestPercentile}%"></div>
+                    </div>
+                    <div class="percentile-context">Median Pro user: <strong>~225/month</strong> <span class="source-tag">Cursor</span></div>
+                </div>
+                <div class="percentile-card">
+                    <div class="percentile-label">Monthly Spend</div>
+                    <div class="percentile-value">Top ${100 - spendPercentile}%</div>
+                    <div class="percentile-desc">${fmtCurrency(monthlySpend)}/month avg</div>
+                    <div class="percentile-bar">
+                        <div class="percentile-fill" style="width: ${spendPercentile}%"></div>
+                    </div>
+                    <div class="percentile-context">Based on Pro tier pricing <span class="source-tag">Est.</span></div>
+                </div>
+                <div class="percentile-card">
+                    <div class="percentile-label">Token Consumption</div>
+                    <div class="percentile-value">Top ${100 - tokenPercentile}%</div>
+                    <div class="percentile-desc">${fmt(Math.round(monthlyTokens))} tokens/month</div>
+                    <div class="percentile-bar">
+                        <div class="percentile-fill" style="width: ${tokenPercentile}%"></div>
+                    </div>
+                    <div class="percentile-context">1B lines/day across 1M users <span class="source-tag">OfficeChair</span></div>
+                </div>
+                <div class="percentile-card">
+                    <div class="percentile-label">Cache Efficiency</div>
+                    <div class="percentile-value">Top ${100 - cachePercentile}%</div>
+                    <div class="percentile-desc">${cacheRate.toFixed(1)}% cache hit rate</div>
+                    <div class="percentile-bar">
+                        <div class="percentile-fill" style="width: ${cachePercentile}%"></div>
+                    </div>
+                    <div class="percentile-context">~30% typical acceptance <span class="source-tag">Opsera</span></div>
+                </div>
+            `;
+
+            // Update stats
+            document.getElementById('dateRange').innerHTML = `
+                <span>${minDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+                →
+                <span>${maxDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+            `;
+
+            document.getElementById('totalRequests').textContent = fmt(data.length);
+            document.getElementById('avgDailyRequests').textContent = `~${Math.round(data.length / uniqueDays)}/day avg`;
+
+            document.getElementById('totalCost').textContent = fmtCurrency(totalCost);
+            document.getElementById('avgMonthlyCost').textContent = `~${fmtCurrency(monthlySpend)}/month`;
+
+            document.getElementById('totalTokens').textContent = fmt(totalTokens);
+            document.getElementById('avgTokensPerRequest').textContent = `~${fmt(Math.round(totalTokens / data.length))}/request`;
+
+            document.getElementById('cacheEfficiency').textContent = cacheRate.toFixed(1) + '%';
+            document.getElementById('cacheDetail').textContent = `${fmt(cacheTokens)} cached tokens`;
+
+            document.getElementById('activeDays').textContent = uniqueDays;
+            document.getElementById('activeDaysDetail').textContent = `${((uniqueDays / totalDays) * 100).toFixed(0)}% of period`;
+
+            // Render charts
+            renderTimelineChart(data);
+            renderModelChart(data);
+            renderKindChart(data);
+            renderMonthlyChart(data);
+            renderTokenChart(inputTokens, cacheTokens, outputTokens);
+            renderHourlyChart(data);
+            renderWeekdayChart(data);
+            renderModelTable(data);
+        }
+
+        function renderTimelineChart(data) {
+            const daily = {}, dailyCost = {};
+            data.forEach(d => {
+                const date = d.date.split('T')[0];
+                daily[date] = (daily[date] || 0) + 1;
+                dailyCost[date] = (dailyCost[date] || 0) + d.cost;
+            });
+            const sorted = Object.keys(daily).sort();
+
+            charts.timeline = new Chart(document.getElementById('timelineChart'), {
+                type: 'line',
+                data: {
+                    labels: sorted,
+                    datasets: [{
+                        label: 'Requests',
+                        data: sorted.map(k => daily[k]),
+                        borderColor: colors.gold,
+                        backgroundColor: 'rgba(245,166,35,0.08)',
+                        fill: true,
+                        tension: 0.4,
+                        pointRadius: 0,
+                        pointHoverRadius: 5,
+                        borderWidth: 2,
+                        yAxisID: 'y'
+                    }, {
+                        label: 'Cost ($)',
+                        data: sorted.map(k => dailyCost[k]),
+                        borderColor: colors.coral,
+                        backgroundColor: 'transparent',
+                        tension: 0.4,
+                        pointRadius: 0,
+                        pointHoverRadius: 5,
+                        borderWidth: 2,
+                        yAxisID: 'y1'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: { mode: 'index', intersect: false },
+                    scales: {
+                        x: {
+                            type: 'time',
+                            time: { unit: 'month', displayFormats: { month: 'MMM' } },
+                            grid: { display: false }
+                        },
+                        y: {
+                            position: 'left',
+                            title: { display: true, text: 'Requests', color: colors.gold },
+                            grid: { color: 'rgba(255,255,255,0.03)' }
+                        },
+                        y1: {
+                            position: 'right',
+                            title: { display: true, text: 'Cost ($)', color: colors.coral },
+                            grid: { display: false }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                            align: 'end',
+                            labels: { usePointStyle: true, pointStyle: 'circle', padding: 20 }
+                        }
+                    }
+                }
+            });
+        }
+
+        function renderModelChart(data) {
+            const families = {};
+            data.forEach(d => {
+                let fam = d.model;
+                if (d.model.includes('opus')) fam = 'Opus';
+                else if (d.model.includes('sonnet')) fam = 'Sonnet';
+                else if (d.model.includes('haiku')) fam = 'Haiku';
+                else if (d.model.includes('composer')) fam = 'Composer';
+                else if (d.model.includes('o1') || d.model.includes('gpt')) fam = 'OpenAI';
+                families[fam] = (families[fam] || 0) + 1;
+            });
+            const sorted = Object.entries(families).sort((a, b) => b[1] - a[1]);
+
+            charts.model = new Chart(document.getElementById('modelChart'), {
+                type: 'bar',
+                data: {
+                    labels: sorted.map(s => s[0]),
+                    datasets: [{
+                        data: sorted.map(s => s[1]),
+                        backgroundColor: sorted.map((_, i) => colorArr[i % colorArr.length]),
+                        borderRadius: 8,
+                        borderSkipped: false
+                    }]
+                },
+                options: {
+                    indexAxis: 'y',
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { grid: { color: 'rgba(255,255,255,0.03)' } },
+                        y: { grid: { display: false } }
+                    }
+                }
+            });
+        }
+
+        function renderKindChart(data) {
+            const kinds = {};
+            data.forEach(d => kinds[d.kind] = (kinds[d.kind] || 0) + 1);
+            const sorted = Object.entries(kinds).sort((a, b) => b[1] - a[1]);
+
+            charts.kind = new Chart(document.getElementById('kindChart'), {
+                type: 'doughnut',
+                data: {
+                    labels: sorted.map(s => s[0]),
+                    datasets: [{
+                        data: sorted.map(s => s[1]),
+                        backgroundColor: [colors.gold, colors.teal, colors.coral, colors.violet, colors.blue],
+                        borderWidth: 0,
+                        spacing: 3
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    cutout: '60%',
+                    plugins: {
+                        legend: {
+                            position: 'right',
+                            labels: { usePointStyle: true, pointStyle: 'circle', padding: 16 }
+                        }
+                    }
+                }
+            });
+        }
+
+        function renderMonthlyChart(data) {
+            const monthly = {};
+            data.forEach(d => {
+                const date = new Date(d.date);
+                if (!isNaN(date)) {
+                    const m = date.toLocaleString('en-US', { month: 'short' });
+                    monthly[m] = (monthly[m] || 0) + d.cost;
+                }
+            });
+            const order = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+            const months = order.filter(m => monthly[m] !== undefined);
+
+            charts.monthly = new Chart(document.getElementById('monthlyChart'), {
+                type: 'bar',
+                data: {
+                    labels: months,
+                    datasets: [{
+                        data: months.map(m => monthly[m]),
+                        backgroundColor: colors.gold,
+                        borderRadius: 6,
+                        borderSkipped: false
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { grid: { display: false } },
+                        y: {
+                            grid: { color: 'rgba(255,255,255,0.03)' },
+                            ticks: { callback: v => '$' + v }
+                        }
+                    }
+                }
+            });
+        }
+
+        function renderTokenChart(inputTokens, cacheTokens, outputTokens) {
+            charts.token = new Chart(document.getElementById('tokenChart'), {
+                type: 'doughnut',
+                data: {
+                    labels: ['Input Tokens', 'Cached Tokens', 'Output Tokens'],
+                    datasets: [{
+                        data: [inputTokens, cacheTokens, outputTokens],
+                        backgroundColor: [colors.blue, colors.violet, colors.teal],
+                        borderWidth: 0,
+                        spacing: 3
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    cutout: '60%',
+                    plugins: {
+                        legend: {
+                            position: 'right',
+                            labels: { usePointStyle: true, pointStyle: 'circle', padding: 16 }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: ctx => ctx.label + ': ' + fmt(ctx.raw)
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function renderHourlyChart(data) {
+            const hourly = Array(24).fill(0);
+            data.forEach(d => {
+                const date = new Date(d.date);
+                if (!isNaN(date)) hourly[date.getUTCHours()]++;
+            });
+            const max = Math.max(...hourly);
+
+            charts.hourly = new Chart(document.getElementById('hourlyChart'), {
+                type: 'bar',
+                data: {
+                    labels: Array.from({length: 24}, (_, i) => i + ':00'),
+                    datasets: [{
+                        data: hourly,
+                        backgroundColor: hourly.map(v => `rgba(245,166,35,${0.15 + (v/max) * 0.85})`),
+                        borderRadius: 4,
+                        borderSkipped: false
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { grid: { display: false } },
+                        y: { grid: { color: 'rgba(255,255,255,0.03)' } }
+                    }
+                }
+            });
+        }
+
+        function renderWeekdayChart(data) {
+            const weekdays = Array(7).fill(0);
+            const names = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+            data.forEach(d => {
+                const date = new Date(d.date);
+                if (!isNaN(date)) weekdays[date.getUTCDay()]++;
+            });
+            const max = Math.max(...weekdays);
+
+            charts.weekday = new Chart(document.getElementById('weekdayChart'), {
+                type: 'bar',
+                data: {
+                    labels: names,
+                    datasets: [{
+                        data: weekdays,
+                        backgroundColor: weekdays.map(v => `rgba(96,165,250,${0.15 + (v/max) * 0.85})`),
+                        borderRadius: 6,
+                        borderSkipped: false
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { grid: { display: false } },
+                        y: { grid: { color: 'rgba(255,255,255,0.03)' } }
+                    }
+                }
+            });
+        }
+
+        function renderModelTable(data) {
+            const stats = {};
+            data.forEach(d => {
+                if (!stats[d.model]) stats[d.model] = { req: 0, cost: 0, tokens: 0, cache: 0, input: 0 };
+                stats[d.model].req++;
+                stats[d.model].cost += d.cost;
+                stats[d.model].tokens += d.total;
+                stats[d.model].cache += d.cache;
+                stats[d.model].input += d.input;
+            });
+
+            const sorted = Object.entries(stats).sort((a, b) => b[1].req - a[1].req).slice(0, 12);
+            const maxReq = Math.max(...sorted.map(s => s[1].req));
+
+            document.getElementById('modelTableBody').innerHTML = sorted.map(([model, s]) => {
+                const avg = Math.round(s.tokens / s.req);
+                const cacheR = s.input > 0 ? ((s.cache / (s.input + s.cache)) * 100).toFixed(1) : 0;
+                const barW = ((s.req / maxReq) * 100).toFixed(0);
+                return `<tr>
+                    <td class="model-name">${model}</td>
+                    <td class="bar-cell">
+                        <span style="position:relative;z-index:1">${fmt(s.req)}</span>
+                        <div class="bar-bg" style="width:${barW}%"></div>
+                    </td>
+                    <td class="cost">${fmtCurrency(s.cost)}</td>
+                    <td>${fmt(avg)}</td>
+                    <td>${cacheR}%</td>
+                </tr>`;
+            }).join('');
+        }
+
+        // Methodology toggle
+        function toggleMethodology() {
+            const toggle = document.querySelector('.methodology-toggle');
+            const content = document.getElementById('methodologyContent');
+            toggle.classList.toggle('expanded');
+            content.classList.toggle('visible');
+        }
+
+        // Share functionality
+        function showShareModal() {
+            document.getElementById('shareModal').classList.add('visible');
+        }
+
+        function hideShareModal() {
+            document.getElementById('shareModal').classList.remove('visible');
+        }
+
+        function generateShareLink() {
+            if (!reportData) return;
+
+            const name = document.getElementById('reportName').value || 'report';
+            
+            // Create summary metrics (not full data)
+            const dates = reportData.map(d => new Date(d.date)).filter(d => !isNaN(d));
+            const minDate = Math.min(...dates);
+            const maxDate = Math.max(...dates);
+            const months = Math.max(1, Math.ceil((maxDate - minDate) / (86400000 * 30)));
+            
+            const summary = {
+                n: name,
+                r: reportData.length, // total requests
+                c: reportData.reduce((s, d) => s + d.cost, 0).toFixed(2), // cost
+                t: reportData.reduce((s, d) => s + d.total, 0), // tokens
+                h: reportData.reduce((s, d) => s + d.cache, 0), // cache
+                i: reportData.reduce((s, d) => s + d.input, 0), // input
+                d1: minDate,
+                d2: maxDate,
+                m: months
+            };
+
+            // Compress and encode
+            const json = JSON.stringify(summary);
+            const compressed = pako.deflate(json, { to: 'string' });
+            const encoded = btoa(String.fromCharCode.apply(null, compressed));
+
+            const baseUrl = window.location.origin + window.location.pathname;
+            const shareUrl = `${baseUrl}#${encodeURIComponent(name)}/${encoded}`;
+
+            document.getElementById('shareLink').textContent = shareUrl;
+        }
+
+        function copyShareLink() {
+            const link = document.getElementById('shareLink').textContent;
+            if (link.startsWith('Click')) return;
+
+            navigator.clipboard.writeText(link).then(() => {
+                showToast('Copied to clipboard!');
+            });
+        }
+
+        function showToast(message) {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.classList.add('visible');
+            setTimeout(() => toast.classList.remove('visible'), 2000);
+        }
+
+        // Check for shared report in URL
+        function checkForSharedReport() {
+            const hash = window.location.hash;
+            if (!hash || hash.length < 10) return;
+
+            try {
+                const parts = hash.slice(1).split('/');
+                if (parts.length < 2) return;
+
+                const encoded = parts[1];
+                const compressed = Uint8Array.from(atob(decodeURIComponent(encoded)), c => c.charCodeAt(0));
+                const json = pako.inflate(compressed, { to: 'string' });
+                const summary = JSON.parse(json);
+
+                renderSharedReport(summary);
+            } catch (e) {
+                console.error('Could not parse shared report:', e);
+            }
+        }
+
+        function renderSharedReport(summary) {
+            document.getElementById('uploadZone').style.display = 'none';
+            document.getElementById('reportSection').classList.add('visible');
+
+            const months = summary.m || 1;
+            const monthlyRequests = summary.r / months;
+            const monthlySpend = parseFloat(summary.c) / months;
+            const monthlyTokens = summary.t / months;
+            const cacheRate = summary.i > 0 ? (summary.h / (summary.i + summary.h)) * 100 : 0;
+
+            const requestPercentile = calculatePercentile(monthlyRequests, BENCHMARKS.requestPercentiles);
+            const spendPercentile = calculatePercentile(monthlySpend, BENCHMARKS.spendPercentiles);
+            const tokenPercentile = calculatePercentile(monthlyTokens, BENCHMARKS.tokenPercentiles);
+            const cachePercentile = calculatePercentile(cacheRate, BENCHMARKS.cachePercentiles);
+
+            document.getElementById('percentileGrid').innerHTML = `
+                <div class="percentile-card">
+                    <div class="percentile-label">Request Volume</div>
+                    <div class="percentile-value">Top ${100 - requestPercentile}%</div>
+                    <div class="percentile-desc">${fmt(Math.round(monthlyRequests))} requests/month</div>
+                    <div class="percentile-bar">
+                        <div class="percentile-fill" style="width: ${requestPercentile}%"></div>
+                    </div>
+                    <div class="percentile-context">Median Pro user: <strong>~225/month</strong> <span class="source-tag">Cursor</span></div>
+                </div>
+                <div class="percentile-card">
+                    <div class="percentile-label">Monthly Spend</div>
+                    <div class="percentile-value">Top ${100 - spendPercentile}%</div>
+                    <div class="percentile-desc">${fmtCurrency(monthlySpend)}/month avg</div>
+                    <div class="percentile-bar">
+                        <div class="percentile-fill" style="width: ${spendPercentile}%"></div>
+                    </div>
+                    <div class="percentile-context">Based on Pro tier pricing <span class="source-tag">Est.</span></div>
+                </div>
+                <div class="percentile-card">
+                    <div class="percentile-label">Token Consumption</div>
+                    <div class="percentile-value">Top ${100 - tokenPercentile}%</div>
+                    <div class="percentile-desc">${fmt(Math.round(monthlyTokens))} tokens/month</div>
+                    <div class="percentile-bar">
+                        <div class="percentile-fill" style="width: ${tokenPercentile}%"></div>
+                    </div>
+                    <div class="percentile-context">1B lines/day across 1M users <span class="source-tag">OfficeChair</span></div>
+                </div>
+                <div class="percentile-card">
+                    <div class="percentile-label">Cache Efficiency</div>
+                    <div class="percentile-value">Top ${100 - cachePercentile}%</div>
+                    <div class="percentile-desc">${cacheRate.toFixed(1)}% cache hit rate</div>
+                    <div class="percentile-bar">
+                        <div class="percentile-fill" style="width: ${cachePercentile}%"></div>
+                    </div>
+                    <div class="percentile-context">~30% typical acceptance <span class="source-tag">Opsera</span></div>
+                </div>
+            `;
+
+            const minDate = new Date(summary.d1);
+            const maxDate = new Date(summary.d2);
+
+            document.getElementById('dateRange').innerHTML = `
+                <span>${minDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+                →
+                <span>${maxDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                · Shared Report: <strong>${summary.n}</strong>
+            `;
+
+            document.getElementById('totalRequests').textContent = fmt(summary.r);
+            document.getElementById('avgDailyRequests').textContent = 'Shared summary';
+
+            document.getElementById('totalCost').textContent = fmtCurrency(parseFloat(summary.c));
+            document.getElementById('avgMonthlyCost').textContent = `~${fmtCurrency(monthlySpend)}/month`;
+
+            document.getElementById('totalTokens').textContent = fmt(summary.t);
+            document.getElementById('avgTokensPerRequest').textContent = `~${fmt(Math.round(summary.t / summary.r))}/request`;
+
+            document.getElementById('cacheEfficiency').textContent = cacheRate.toFixed(1) + '%';
+            document.getElementById('cacheDetail').textContent = `${fmt(summary.h)} cached tokens`;
+
+            document.getElementById('activeDays').textContent = '—';
+            document.getElementById('activeDaysDetail').textContent = 'Upload CSV for details';
+
+            // Hide charts for shared view
+            document.querySelector('.charts').innerHTML = `
+                <div class="chart-card">
+                    <div style="text-align: center; padding: 48px; color: var(--text-tertiary);">
+                        <p style="font-size: 16px; margin-bottom: 12px;">📊 This is a shared summary view</p>
+                        <p>Upload your own CSV to see full charts and detailed analysis</p>
+                        <button class="action-btn primary" style="margin-top: 24px;" onclick="location.href = location.pathname">
+                            Upload Your Data
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Init
+        checkForSharedReport();
+    </script>
+</body>
+</html>

@@ -1,0 +1,6 @@
+# Ignore CSV data files (contains personal usage data)
+*.csv
+
+# OS files
+.DS_Store
+Thumbs.db
